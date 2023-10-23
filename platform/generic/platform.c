@@ -17,6 +17,9 @@
 #include <sbi/sbi_string.h>
 #include <sbi/sbi_system.h>
 #include <sbi/sbi_tlb.h>
+#include <sbi_utils/mpxy/fdt_mpxy.h>
+#include <sbi/sbi_cppc.h>
+#include <sbi_utils/ras/fdt_ras.h>
 #include <sbi_utils/fdt/fdt_domain.h>
 #include <sbi_utils/fdt/fdt_driver.h>
 #include <sbi_utils/fdt/fdt_fixup.h>
