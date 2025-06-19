@@ -11,6 +11,7 @@
 #define __SBI_MPXY_H__
 
 #include <sbi/sbi_list.h>
+#include <sbi/sbi_domain.h>
 
 struct sbi_scratch;
 
@@ -144,6 +145,19 @@ struct sbi_mpxy_channel {
 	void (*switch_eventsstate)(u32 enable);
 };
 
+enum MpxyServiceGroup {
+	ManagementMode = 0xB,
+	RequestForward = 0xC,
+};
+
+struct mpxy_channel_info {
+	struct sbi_mpxy_channel channel;
+	struct sbi_domain *channel_domain;
+	u32 server_channel_id;
+	enum MpxyServiceGroup service_group;
+	u32 msg_len;
+};
+
 /** Register a Message proxy channel */
 int sbi_mpxy_register_channel(struct sbi_mpxy_channel *channel);
 
@@ -182,4 +196,35 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 int sbi_mpxy_get_notification_events(u32 channel_id,
 					unsigned long *events_len);
 
+struct sbi_mpxy_channel *sbi_mpxy_find_channel(u32 channel_id);
+
+void *sbi_get_domain_shmem_base(struct sbi_domain *dom);
+
+int sbi_mpxy_mm_message_handler(struct mpxy_channel_info *channel_info,
+			    u32 msg_id, void *msgbuf, u32 msg_len,
+			    void *respbuf, u32 resp_max_len,
+			    unsigned long *resp_len, 
+				struct sbi_domain *server_domain);
+			
+int sbi_mpxy_reqfwd_message_handler(struct mpxy_channel_info *channel_info,
+			    u32 msg_id, void *msgbuf, u32 msg_len,
+			    void *respbuf, u32 resp_max_len,
+			    unsigned long *resp_len, 
+				struct sbi_domain *server_domain);
+
+void update_channel_data_len(u32 channel_id, u32 data_len);
+
+u32 get_response_len(u32 channel_id);
+
+void safe_mem_copy(void *dst_addr, void *src_addr, u32 length);
+
+int sbi_mpxy_copy_context(struct sbi_domain *client_domain, u32 client_channel_id,
+						struct sbi_domain *server_domain, u32 server_channel_id,
+						u32 client_offset);
+
+int sbi_mpxy_copy_rpmi_payload(struct sbi_domain *current_domain,
+						u32 channel_id, u32 msg_len, 
+						unsigned long src_addr);
+
+int check_shmem_initialised(struct sbi_domain *dom);
 #endif

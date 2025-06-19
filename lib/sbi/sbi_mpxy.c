@@ -89,6 +89,10 @@ struct mpxy_state {
 	struct mpxy_shmem shmem;
 };
 
+static struct sbi_domain_data mpxy_domain_priv_data = {
+	.data_size = sizeof(struct mpxy_state),
+};
+
 /** Disable hart shared memory */
 static inline void sbi_mpxy_shmem_disable(struct mpxy_state *ms)
 {
@@ -104,11 +108,19 @@ static inline bool mpxy_shmem_enabled(struct mpxy_state *ms)
 		false : true;
 }
 
-/** Get hart shared memory base address */
-static inline void *hart_shmem_base(struct mpxy_state *ms)
+/** Get domain shared memory base address */
+static inline void *domain_shmem_base(struct mpxy_state *ms)
 {
 	return (void *)(unsigned long)SHMEM_PHYS_ADDR(ms->shmem.shmem_addr_hi,
 						ms->shmem.shmem_addr_lo);
+}
+
+void *sbi_get_domain_shmem_base(struct sbi_domain *dom)
+{
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	void *shmem_base = domain_shmem_base(ms);
+	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
+	return shmem_base;
 }
 
 /** Make sure all attributes are packed for direct memcpy in ATTR_READ */
@@ -144,7 +156,7 @@ static inline bool mpxy_is_std_attr(u32 attr_id)
 }
 
 /** Find channel_id in registered channels list */
-static struct sbi_mpxy_channel *mpxy_find_channel(u32 channel_id)
+struct sbi_mpxy_channel *sbi_mpxy_find_channel(u32 channel_id)
 {
 	struct sbi_mpxy_channel *channel;
 
@@ -222,7 +234,7 @@ int sbi_mpxy_register_channel(struct sbi_mpxy_channel *channel)
 	if (!channel)
 		return SBI_EINVAL;
 
-	if (mpxy_find_channel(channel->channel_id))
+	if (sbi_mpxy_find_channel(channel->channel_id))
 		return SBI_EALREADY;
 
 	/* Initialize channel specific attributes */
@@ -243,11 +255,16 @@ int sbi_mpxy_register_channel(struct sbi_mpxy_channel *channel)
 int sbi_mpxy_init(struct sbi_scratch *scratch)
 {
 	struct mpxy_state *ms;
+	struct sbi_domain *dom;
+	int ret;
 
 	mpxy_state_offset = sbi_scratch_alloc_type_offset(struct mpxy_state);
 	if (!mpxy_state_offset)
 		return SBI_ENOMEM;
 
+	ret = sbi_domain_register_data(&mpxy_domain_priv_data);
+	if (ret)
+		return ret;
 	/**
 	 * TODO: Proper support for checking msi support from platform.
 	 * Currently disable msi and sse and use polling
@@ -256,7 +273,11 @@ int sbi_mpxy_init(struct sbi_scratch *scratch)
 	ms->msi_avail = false;
 	ms->sse_avail = false;
 
-	sbi_mpxy_shmem_disable(ms);
+	sbi_domain_for_each(dom) {
+		struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+		if(ms)
+			sbi_mpxy_shmem_disable(ms);
+	}
 
 	return sbi_platform_mpxy_init(sbi_platform_ptr(scratch));
 }
@@ -270,7 +291,9 @@ int sbi_mpxy_set_shmem(unsigned long shmem_phys_lo,
 		       unsigned long shmem_phys_hi,
 		       unsigned long flags)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
 	unsigned long *ret_buf;
 
 	/** Disable shared memory if both hi and lo have all bit 1s */
@@ -312,7 +335,9 @@ int sbi_mpxy_set_shmem(unsigned long shmem_phys_lo,
 
 int sbi_mpxy_get_channel_ids(u32 start_index)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
 	u32 remaining, returned, max_channelids;
 	u32 node_index = 0, node_ret = 0;
 	struct sbi_mpxy_channel *channel;
@@ -328,8 +353,8 @@ int sbi_mpxy_get_channel_ids(u32 start_index)
 	if (start_index > channels_count)
 		return SBI_ERR_INVALID_PARAM;
 
-	shmem_base = hart_shmem_base(ms);
-	sbi_hart_map_saddr((unsigned long)hart_shmem_base(ms), mpxy_shmem_size);
+	shmem_base = domain_shmem_base(ms);
+	sbi_hart_map_saddr((unsigned long)domain_shmem_base(ms), mpxy_shmem_size);
 
 	/** number of channel ids which can be stored in shmem adjusting
 	 * for remaining and returned fields */
@@ -363,7 +388,9 @@ int sbi_mpxy_get_channel_ids(u32 start_index)
 
 int sbi_mpxy_read_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
 	int ret = SBI_SUCCESS;
 	u32 *attr_ptr, end_id;
 	void *shmem_base;
@@ -371,7 +398,7 @@ int sbi_mpxy_read_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	struct sbi_mpxy_channel *channel = mpxy_find_channel(channel_id);
+	struct sbi_mpxy_channel *channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -384,10 +411,10 @@ int sbi_mpxy_read_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 	if (!attr_count || (attr_count > (mpxy_shmem_size / ATTR_SIZE)))
 		return SBI_ERR_INVALID_PARAM;
 
-	shmem_base = hart_shmem_base(ms);
+	shmem_base = domain_shmem_base(ms);
 	end_id = base_attr_id + attr_count - 1;
 
-	sbi_hart_map_saddr((unsigned long)hart_shmem_base(ms), mpxy_shmem_size);
+	sbi_hart_map_saddr((unsigned long)domain_shmem_base(ms), mpxy_shmem_size);
 
 	/* Standard attributes range check */
 	if (mpxy_is_std_attr(base_attr_id)) {
@@ -479,7 +506,9 @@ static int mpxy_check_write_std_attr(struct sbi_mpxy_channel *channel,
 static void mpxy_write_std_attr(struct sbi_mpxy_channel *channel, u32 attr_id,
 			        u32 attr_val)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
 	struct sbi_mpxy_channel_attrs *attrs = &channel->attrs;
 
 	switch(attr_id) {
@@ -513,7 +542,9 @@ static void mpxy_write_std_attr(struct sbi_mpxy_channel *channel, u32 attr_id,
 
 int sbi_mpxy_write_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
 	u32 *mem_ptr, attr_id, end_id, attr_val;
 	struct sbi_mpxy_channel *channel;
 	int ret, mem_idx;
@@ -522,7 +553,7 @@ int sbi_mpxy_write_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	channel = mpxy_find_channel(channel_id);
+	channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -535,7 +566,7 @@ int sbi_mpxy_write_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 	if (!attr_count || (attr_count > (mpxy_shmem_size / ATTR_SIZE)))
 		return SBI_ERR_INVALID_PARAM;
 
-	shmem_base = hart_shmem_base(ms);
+	shmem_base = domain_shmem_base(ms);
 	end_id = base_attr_id + attr_count - 1;
 
 	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
@@ -603,7 +634,9 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 			  unsigned long msg_data_len,
 			  unsigned long *resp_data_len)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
 	struct sbi_mpxy_channel *channel;
 	void *shmem_base, *resp_buf;
 	u32 resp_bufsize;
@@ -612,7 +645,7 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	channel = mpxy_find_channel(channel_id);
+	channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -626,7 +659,7 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 		msg_data_len > channel->attrs.msg_data_maxlen)
 		return SBI_ERR_INVALID_PARAM;
 
-	shmem_base = hart_shmem_base(ms);
+	shmem_base = domain_shmem_base(ms);
 	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
 
 	if (resp_data_len) {
@@ -661,7 +694,9 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 
 int sbi_mpxy_get_notification_events(u32 channel_id, unsigned long *events_len)
 {
-	struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
+	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct mpxy_state *ms = sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	// struct mpxy_state *ms = sbi_scratch_thishart_offset_ptr(mpxy_state_offset);
 	struct sbi_mpxy_channel *channel;
 	void *eventsbuf, *shmem_base;
 	int ret;
@@ -669,11 +704,11 @@ int sbi_mpxy_get_notification_events(u32 channel_id, unsigned long *events_len)
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	channel = mpxy_find_channel(channel_id);
+	channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel || !channel->get_notification_events)
 		return SBI_ERR_NOT_SUPPORTED;
 
-	shmem_base = hart_shmem_base(ms);
+	shmem_base = domain_shmem_base(ms);
 	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
 	eventsbuf = shmem_base;
 	ret = channel->get_notification_events(channel, eventsbuf,
@@ -688,4 +723,74 @@ int sbi_mpxy_get_notification_events(u32 channel_id, unsigned long *events_len)
 		return SBI_ERR_FAILED;
 
 	return SBI_SUCCESS;
+}
+
+void safe_mem_copy(void *dst_addr, void *src_addr, u32 length)
+{
+	sbi_memcpy((void *)dst_addr, (const void *)src_addr, (size_t)length);
+}
+
+int sbi_mpxy_copy_context(struct sbi_domain *src_domain, u32 src_channel_id,
+						struct sbi_domain *dst_domain, u32 dst_channel_id,
+						u32 src_offset)
+{
+	unsigned long src_shmem_base = (unsigned long)sbi_get_domain_shmem_base(src_domain);
+	unsigned long dst_shmem_base = (unsigned long)sbi_get_domain_shmem_base(dst_domain);
+
+	u32 src_data_len = get_response_len(src_channel_id);
+	u32 dst_data_len = get_response_len(dst_channel_id);
+	u32 msg_copy_size = src_data_len - src_offset;
+	
+	if(mpxy_shmem_size > msg_copy_size+dst_data_len){
+		safe_mem_copy((void *)(dst_shmem_base + dst_data_len),
+					(void *)(src_shmem_base + src_offset),
+					src_data_len);
+		update_channel_data_len(dst_channel_id, dst_data_len + msg_copy_size);
+		return SBI_SUCCESS;
+	} else {
+		return SBI_ERR_FAILED;
+	}
+}
+
+int sbi_mpxy_copy_rpmi_payload(struct sbi_domain *current_domain, u32 channel_id, u32 msg_len, unsigned long src_addr)
+{
+	void *src_shmem_base = sbi_get_domain_shmem_base(current_domain);
+
+	safe_mem_copy(src_shmem_base, (void *)src_addr, msg_len);
+
+	update_channel_data_len(channel_id, get_response_len(channel_id) + msg_len);
+	
+	return SBI_SUCCESS;
+}
+
+int check_shmem_initialised(struct sbi_domain *dom)
+{
+	struct mpxy_state *ms = 
+			sbi_domain_data_ptr(dom, &mpxy_domain_priv_data);
+	if(!ms)
+		return SBI_EFAIL;
+	
+	if ((ms->shmem.shmem_addr_lo == INVALID_ADDR &&
+	    ms->shmem.shmem_addr_hi == INVALID_ADDR) || 
+		ms->shmem.shmem_addr_hi == ms->shmem.shmem_addr_lo) {
+		return SBI_EFAIL;
+	}
+	return SBI_SUCCESS;
+}
+
+u32 get_response_len(u32 channel_id)
+{
+	struct sbi_mpxy_channel *channel = sbi_mpxy_find_channel(channel_id);
+	struct mpxy_channel_info *channel_info = 
+		container_of(channel, struct mpxy_channel_info, channel);
+	return channel_info->msg_len;
+}
+
+void update_channel_data_len(u32 channel_id, u32 data_len)
+{
+	struct sbi_mpxy_channel *channel = sbi_mpxy_find_channel(channel_id);
+	struct mpxy_channel_info *channel_info = 
+		container_of(channel, struct mpxy_channel_info, channel);
+	channel_info->msg_len = data_len;
+	return;
 }
