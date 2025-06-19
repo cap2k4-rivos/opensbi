@@ -1,20 +1,10 @@
-/*
- * SPDX-License-Identifier: BSD-2-Clause
- *
- * Copyright (c) 2024 Intel Corporation. All rights reserved.
- */
-
-#include <sbi/sbi_ecall.h>
 #include <sbi/sbi_error.h>
 #include <sbi/sbi_heap.h>
 #include <sbi/sbi_mpxy.h>
 #include <libfdt.h>
-#include <sbi_utils/fdt/fdt_helper.h>
 #include <sbi_utils/mpxy/fdt_mpxy.h>
 #include <sbi/sbi_domain.h>
 #include <sbi/sbi_console.h>
-#include <sbi/sbi_sse.h>
-#include <sbi_utils/mailbox/rpmi_msgprot.h>
 
 #define RISCV_MSG_ID_SMM_VERSION		0x1
 #define RISCV_MSG_ID_SMM_COMMUNICATE	0x4
