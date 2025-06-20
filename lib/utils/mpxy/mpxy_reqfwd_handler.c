@@ -9,7 +9,6 @@
 
 #define RPMI_HDR_LEN sizeof(struct rpmi_message_header)
 #define RPMI_MM_COMM_SIZE 16
-struct rpmi_message_header rhdr;
 
 struct rpmi_message_header prepare_rpmi_message_header(u32 payload_len)
 {
@@ -54,10 +53,34 @@ static struct rpmi_reqfwd_retrieve_message_resp
 static int validate_rpmi_hdr(struct sbi_domain *current_domain,
 							u32 channel_id,
 							u32 msg_len,
-							void *msgbuf){
-	
+							void *msgbuf)
+{
+	struct rpmi_message_header rhdr;
 	memset(&rhdr, 0, sizeof(struct rpmi_message_header));
 	safe_mem_copy(&rhdr, msgbuf, sizeof(struct rpmi_message_header));
+
+	if(rhdr.servicegroup_id != RPMI_SRV_GRP_REQUEST_FORWARD)
+		return SBI_EFAIL;
+
+	switch(rhdr.service_id){
+		case RPMI_REQFWD_SRV_ENABLE_NOTIFICATION:
+		case RPMI_REQFWD_SRV_RETRIEVE_CURRENT_MESSAGE:
+		case RPMI_REQFWD_SRV_COMPLETE_CURRENT_MESSAGE:
+			break;
+		default:
+			return SBI_EFAIL;
+	}
+
+	switch(rhdr.flags){
+		case RPMI_MSG_NORMAL_REQUEST:
+		case RPMI_MSG_POSTED_REQUEST:
+		case RPMI_MSG_ACKNOWLDGEMENT:
+		case RPMI_MSG_NOTIFICATION:
+			break;
+		default:
+			return SBI_EFAIL;
+	}
+
 	return SBI_SUCCESS;
 }
 

@@ -30,8 +30,6 @@ struct mm_get_attributes {
 	u32 mm_shmem_size;
 };
 
-static struct mm_get_attributes attr;
-
 int sbi_mpxy_mm_message_handler(struct mpxy_channel_info *channel_info,
 				  u32 msg_id, void *msgbuf, u32 msg_len,
 			    void *respbuf, u32 resp_max_len,
@@ -41,6 +39,7 @@ int sbi_mpxy_mm_message_handler(struct mpxy_channel_info *channel_info,
 	update_channel_data_len(channel_info->channel.channel_id, msg_len);
 
 	if (RISCV_MSG_ID_SMM_VERSION == msg_id) {
+		struct mm_get_attributes attr;
 		memset(&attr, 0, sizeof(struct mm_get_attributes));
 		attr.status	 = 0;
 		attr.mm_version = SMM_VERSION_COMPILED;
