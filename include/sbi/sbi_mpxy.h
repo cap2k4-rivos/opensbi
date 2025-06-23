@@ -11,6 +11,32 @@
 #define __SBI_MPXY_H__
 
 #include <sbi/sbi_list.h>
+#include <sbi/sbi_domain.h>
+#include <sbi_utils/mailbox/rpmi_msgprot.h>
+
+/* Multi Domain control flow in MPXY looks something like this
++--------------------------------+        +------------------------------+
+|     Non Secure Mode            |        |        Secure Mode           |
+|                                |        |                              |
++-----+------------+-------------+        +-----------------+------------+
+      |            |                                        |
+   RAS|Channel     |                                    ReqFwd Channel
+      |            |                                        |
+      |          Variable Channel                           |
++-----+------------+----------------------------------------+------------+
+|     |            |                                        |            |
+|     |            |  +----------------+          +---------+---------+  |
+|     |            +--|                |          |                   |  |
+|     |               |Untrusted domain+----------+ Trusted domain    |  |
+|     +---------------|                |          |                   |  |
+|                     +-------+--------+          +----------+--------+  |
+|                                                            |           |
++-----------------------------+------------------------------+-----------+
+                              |  +----------------------+    |
+                              |  | Context Switching b/w|    |
+                              +--|       domains        |----+
+                                 +----------------------+
+ */
 
 struct sbi_scratch;
 
@@ -144,6 +170,20 @@ struct sbi_mpxy_channel {
 	void (*switch_eventsstate)(u32 enable);
 };
 
+/** 
+ * Each channel has associated channel_info struct that stores info
+ * including the pointer to channel struct itself and other information
+ * like the channel_domain(associated domain of the channel), and other
+ * information.
+ */
+struct mpxy_channel_info {
+	struct sbi_mpxy_channel channel;
+	struct sbi_domain *channel_domain;
+	u32 server_channel_id;
+	enum rpmi_servicegroup_id service_group;
+	u32 msg_len;
+};
+
 /** Register a Message proxy channel */
 int sbi_mpxy_register_channel(struct sbi_mpxy_channel *channel);
 
@@ -181,5 +221,41 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 /** Get Message proxy notification events */
 int sbi_mpxy_get_notification_events(u32 channel_id,
 					unsigned long *events_len);
+
+/** Get MPXY channel pointer using the channel_id */
+struct sbi_mpxy_channel *sbi_mpxy_find_channel(u32 channel_id);
+
+/** Get per domain shmem base address for the provided domain */
+void *sbi_get_domain_shmem_base(struct sbi_domain *dom);
+
+/** 
+ * When switching domains we need to copy the context from
+ * shmem buffer of one channel on first domain to the 2nd 
+ * channel running on the other domain so we need to safely
+ * copy that context.
+ */
+int sbi_mpxy_copy_context(struct sbi_domain *client_domain, u32 client_channel_id,
+						struct sbi_domain *server_domain, u32 server_channel_id,
+						u32 client_offset);
+						
+/** Check if the shared memory of a channel is initialised or not */
+int check_shmem_initialised(struct sbi_domain *dom);
+
+/** 
+ * Every time a new message is added or removed from
+ * an MPXY channel we need to update the data_len attribute 
+ * in the channel info. This method uses channel_id to
+ * identify the associated channel_info struct and then update
+ * the value.
+ */
+void update_channel_data_len(u32 channel_id, u32 data_len);
+
+/**
+ * Each channel has some data_len associated with it that
+ * is stored inside it's channel_info struct. This is required
+ * to correctly offset new messages we add to the channel shared
+ * memory.
+ */
+u32 get_channel_data_len(u32 channel_id);
 
 #endif

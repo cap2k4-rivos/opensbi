@@ -164,7 +164,7 @@ static inline bool mpxy_is_std_attr(u32 attr_id)
 }
 
 /** Find channel_id in registered channels list */
-static struct sbi_mpxy_channel *mpxy_find_channel(u32 channel_id)
+struct sbi_mpxy_channel *sbi_mpxy_find_channel(u32 channel_id)
 {
 	struct sbi_mpxy_channel *channel;
 
@@ -242,7 +242,7 @@ int sbi_mpxy_register_channel(struct sbi_mpxy_channel *channel)
 	if (!channel)
 		return SBI_EINVAL;
 
-	if (mpxy_find_channel(channel->channel_id))
+	if (sbi_mpxy_find_channel(channel->channel_id))
 		return SBI_EALREADY;
 
 	/* Initialize channel specific attributes */
@@ -469,7 +469,7 @@ int sbi_mpxy_read_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	struct sbi_mpxy_channel *channel = mpxy_find_channel(channel_id);
+	struct sbi_mpxy_channel *channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -620,7 +620,7 @@ int sbi_mpxy_write_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	channel = mpxy_find_channel(channel_id);
+	channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -710,7 +710,7 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	channel = mpxy_find_channel(channel_id);
+	channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -767,7 +767,7 @@ int sbi_mpxy_get_notification_events(u32 channel_id, unsigned long *events_len)
 	if (!mpxy_shmem_enabled(ms))
 		return SBI_ERR_NO_SHMEM;
 
-	channel = mpxy_find_channel(channel_id);
+	channel = sbi_mpxy_find_channel(channel_id);
 	if (!channel || !channel->get_notification_events)
 		return SBI_ERR_NOT_SUPPORTED;
 
@@ -786,4 +786,68 @@ int sbi_mpxy_get_notification_events(u32 channel_id, unsigned long *events_len)
 		return SBI_ERR_FAILED;
 
 	return SBI_SUCCESS;
+}
+
+int check_shmem_initialised(struct sbi_domain *dom)
+{
+	struct mpxy_state *ms = 
+			sbi_given_domain_mpxy_state_thishart_ptr(dom);
+	if(!ms)
+		return SBI_EFAIL;
+	
+	if ((ms->shmem.shmem_addr_lo == INVALID_ADDR &&
+	    ms->shmem.shmem_addr_hi == INVALID_ADDR) || 
+		ms->shmem.shmem_addr_hi == ms->shmem.shmem_addr_lo) {
+		return SBI_EFAIL;
+	}
+	return SBI_SUCCESS;
+}
+
+int sbi_mpxy_copy_context(struct sbi_domain *src_domain, u32 src_channel_id,
+						struct sbi_domain *dst_domain, u32 dst_channel_id,
+						u32 src_offset)
+{
+	unsigned long src_shmem_base = (unsigned long)sbi_get_domain_shmem_base(src_domain);
+	unsigned long dst_shmem_base = (unsigned long)sbi_get_domain_shmem_base(dst_domain);
+
+	u32 src_data_len = get_channel_data_len(src_channel_id);
+	u32 dst_data_len = get_channel_data_len(dst_channel_id);
+	u32 msg_copy_size = src_data_len - src_offset;
+	
+	if(mpxy_shmem_size > msg_copy_size+dst_data_len){
+		sbi_memcpy((void *)(dst_shmem_base + dst_data_len),
+					(void *)(src_shmem_base + src_offset),
+					src_data_len);
+		update_channel_data_len(dst_channel_id, dst_data_len + msg_copy_size);
+		return SBI_SUCCESS;
+	} else {
+		return SBI_ERR_FAILED;
+	}
+}
+
+void update_channel_data_len(u32 channel_id, u32 data_len)
+{
+	/** Use the channel_id to fetch the mpxy_channel associated with it. */
+	struct sbi_mpxy_channel *channel = sbi_mpxy_find_channel(channel_id);
+
+	/** 
+	 * Each channel has associated channel_info struct that stores info
+	 * including the pointer to channel struct itself and other information
+	 * like the channel_domain(associated domain of the channel), and other
+	 * information. We will fetch the channel_info struct using the 
+	 * sbi_mpxy_channel struct.
+	 */
+	struct mpxy_channel_info *channel_info = 
+		container_of(channel, struct mpxy_channel_info, channel);
+	/** Update the msg_len attribute of the channel_info struct associated with the channel */
+	channel_info->msg_len = data_len;
+	return;
+}
+
+u32 get_channel_data_len(u32 channel_id)
+{
+	struct sbi_mpxy_channel *channel = sbi_mpxy_find_channel(channel_id);
+	struct mpxy_channel_info *channel_info = 
+		container_of(channel, struct mpxy_channel_info, channel);
+	return channel_info->msg_len;
 }
