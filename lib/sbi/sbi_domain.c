@@ -985,3 +985,15 @@ fail_free_domain_hart_ptr_offset:
 	sbi_scratch_free_offset(domain_hart_ptr_offset);
 	return rc;
 }
+
+struct sbi_domain *get_domain(char* name)
+{
+	struct sbi_domain *dom = NULL;
+	sbi_domain_for_each(dom)
+	{
+		if (!sbi_strcmp(dom->name, name)) {
+			return dom;
+		}
+	}
+	return NULL;
+}
