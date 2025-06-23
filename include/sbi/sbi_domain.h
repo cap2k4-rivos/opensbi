@@ -313,4 +313,7 @@ int sbi_domain_finalize(struct sbi_scratch *scratch, u32 cold_hartid);
 /** Initialize domains */
 int sbi_domain_init(struct sbi_scratch *scratch, u32 cold_hartid);
 
+/** Get domain pointer from domain name */
+struct sbi_domain *get_domain(char* name);
+
 #endif
