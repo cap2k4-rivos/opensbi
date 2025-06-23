@@ -214,6 +214,7 @@ enum rpmi_servicegroup_id {
 	RPMI_SRVGRP_HSM = 0x0005,
 	RPMI_SRVGRP_CPPC = 0x0006,
 	RPMI_SRVGRP_CLOCK = 0x0008,
+	RPMI_SRV_GRP_REQUEST_FORWARD = 0x000C,
 	RPMI_SRVGRP_ID_MAX_COUNT,
 
 	/* Reserved range for service groups */
@@ -353,6 +354,37 @@ struct rpmi_sysmsi_get_msi_target_resp {
 	u32 sys_msi_address_low;
 	u32 sys_msi_address_high;
 	u32 sys_msi_data;
+};
+
+enum rpmi_reqfwd_service_id {
+	RPMI_REQFWD_SRV_ENABLE_NOTIFICATION = 0x1,
+	RPMI_REQFWD_SRV_RETRIEVE_CURRENT_MESSAGE = 0x2,
+	RPMI_REQFWD_SRV_COMPLETE_CURRENT_MESSAGE = 0x3,
+};
+
+enum rpmi_reqfwd_response_type {
+	RPMI_REQFWD_RESP_COMPLETE,
+	RPMI_REQFWD_RESP_RETRIEVE,
+};
+
+struct reqfwd_retrieve_message_resp {
+	s32 status;
+	u32 remaining;
+	u32 returned;
+};
+
+struct rpmi_reqfwd_retrieve_message_resp {
+	struct rpmi_message_header hdr;
+	struct reqfwd_retrieve_message_resp resp;
+};
+
+struct reqfwd_complete_message_resp {
+	s32 status;
+};
+
+struct rpmi_reqfwd_complete_message_resp {
+	struct rpmi_message_header hdr;
+	struct reqfwd_complete_message_resp resp;
 };
 
 /** RPMI System Reset ServiceGroup Service IDs */
