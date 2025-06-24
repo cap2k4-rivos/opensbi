@@ -4,6 +4,8 @@
 #include <libfdt.h>
 #include <sbi_utils/mpxy/fdt_mpxy.h>
 #include <sbi/sbi_domain.h>
+#include <sbi/sbi_init.h>
+#include <sbi/sbi_console.h>
 
 int mm_setup_bootinfo(const void *fdt, int nodeoff, const struct fdt_match *match,
                                 u32 *out_channel_id, u32 *out_channel_server_id)
@@ -138,6 +140,73 @@ int mm_setup_bootinfo(const void *fdt, int nodeoff, const struct fdt_match *matc
     if (!prop_value || len < 4)
         return SBI_EINVAL;
     *out_channel_server_id = (unsigned int)fdt32_to_cpu(*prop_value);
+
+    sbi_printf("IS THIS WORKING??\n");
+    int cpus_node; // This variable will store the offset for the /cpus node
+
+    // 1. Find the /cpus node
+    cpus_node = fdt_path_offset(fdt, "/cpus");
+    if (cpus_node < 0) { // Always check the return value of fdt_path_offset
+        sbi_printf("Error: /cpus node DOESN'T Exist! (Error: %s)\n", fdt_strerror(cpus_node));
+        // CRITICAL: You should probably handle this as a fatal error
+        // or return from the function, as subsequent operations will fail.
+        return 0; // Example of handling: exit or return error code
+    }
+
+    // 2. Set the 'boot-hart' property
+    // fdt_setprop_u32 modifies the DTB in place. Ensure 'fdt' points to a writable buffer.
+    // It returns 0 on success, or an error code. You should check this.
+    int ret = fdt_setprop_u32((void *)fdt, cpus_node,
+                            "boot-hart",
+                            get_boot_hart_id());
+    if (ret < 0) {
+        sbi_printf("Error: Failed to set 'boot-hart' property! (Error: %s)\n", fdt_strerror(ret));
+        // CRITICAL: Handle the error appropriately
+        return 0;
+    }
+    sbi_printf("ADDED boot-hart: %d\n", get_boot_hart_id());
+    sbi_printf("IS THIS WORKING222??\n");
+
+    // --- Reading properties ---
+
+    // 3. Declare 'len' and other variables properly
+    // 'len' is crucial for fdt_getprop. It must be an 'int'.
+    const fdt32_t *val;
+    unsigned long freq; // For frequency and boot-hart ID
+
+    // No need for a second fdt_path_offset for /cpus, use the existing cpus_node
+    // cpus_offset = fdt_path_offset(fdt, "/cpus"); // REDUNDANT
+    // if (cpus_offset < 0) // REDUNDANT check
+    //     sbi_printf("cpus DOESN'T Exist??\n");
+
+    // 4. Read 'timebase-frequency'
+    val = fdt_getprop(fdt, cpus_node, "timebase-frequency", &len);
+    if (val == NULL) { // CRITICAL: Always check if fdt_getprop returns NULL
+        sbi_printf("Error: 'timebase-frequency' property not found or invalid! (Error: %s)\n", fdt_strerror(len));
+        // Handle error, 'len' will contain the libfdt error code here.
+        freq = 0; // Default or error value
+    } else {
+        // Check 'len' to ensure it's the expected size (e.g., sizeof(u32))
+        if (len != sizeof(fdt32_t)) {
+            sbi_printf("Warning: 'timebase-frequency' has unexpected length %d!\n", len);
+        }
+        freq = fdt32_to_cpu(*val);
+    }
+    sbi_printf("timebase-frequency? %lu\n", freq); // Use %lu for unsigned long
+
+    // 5. Read 'boot-hart'
+    val = fdt_getprop(fdt, cpus_node, "boot-hart", &len);
+    if (val == NULL) { // CRITICAL: Always check if fdt_getprop returns NULL
+        sbi_printf("Error: 'boot-hart' property not found or invalid! (Error: %s)\n", fdt_strerror(len));
+        // Handle error.
+        freq = 0; // Default or error value
+    } else {
+        if (len != sizeof(fdt32_t)) {
+            sbi_printf("Warning: 'boot-hart' has unexpected length %d!\n", len);
+        }
+        freq = fdt32_to_cpu(*val);
+    }
+    sbi_printf("boot hart access? %lu\n", freq); // Use %lu for unsigned long
 
     return 0;
 }

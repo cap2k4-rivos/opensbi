@@ -169,7 +169,7 @@ static const struct fdt_match mpxy_match[] = {
 	{},
 };
 
-struct fdt_driver fdt_mpxy_mm = {
+struct fdt_driver fdt_mpxy_handler = {
 	.match_table = mpxy_match,
 	.init = mpxy_init,
 };

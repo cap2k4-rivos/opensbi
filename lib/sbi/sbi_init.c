@@ -35,6 +35,8 @@
 #include <sbi/sbi_version.h>
 #include <sbi/sbi_unit_test.h>
 
+u32 boot_hart_id;
+
 #define BANNER                                              \
 	"   ____                    _____ ____ _____\n"     \
 	"  / __ \\                  / ____|  _ \\_   _|\n"  \
@@ -563,7 +565,10 @@ void __noreturn sbi_init(struct sbi_scratch *scratch)
 	if (sbi_platform_cold_boot_allowed(plat, hartid)) {
 		if (next_mode_supported &&
 		    atomic_xchg(&coldboot_lottery, 1) == 0)
-			coldboot = true;
+			{
+				coldboot = true;
+				boot_hart_id = hartid;
+			}
 	}
 
 	/*
@@ -578,6 +583,11 @@ void __noreturn sbi_init(struct sbi_scratch *scratch)
 		init_coldboot(scratch, hartid);
 	else
 		init_warmboot(scratch, hartid);
+}
+
+u32 get_boot_hart_id()
+{
+	return boot_hart_id;
 }
 
 unsigned long sbi_entry_count(u32 hartindex)

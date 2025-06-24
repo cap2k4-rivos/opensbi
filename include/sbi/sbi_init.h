@@ -22,4 +22,6 @@ unsigned long sbi_init_count(u32 hartindex);
 
 void __noreturn sbi_exit(struct sbi_scratch *scratch);
 
+u32 get_boot_hart_id();
+
 #endif
