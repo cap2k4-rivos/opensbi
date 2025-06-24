@@ -228,6 +228,20 @@ struct sbi_mpxy_channel *sbi_mpxy_find_channel(u32 channel_id);
 /** Get per domain shmem base address for the provided domain */
 void *sbi_get_domain_shmem_base(struct sbi_domain *dom);
 
+/** MPXY Management Mode message handler */
+int sbi_mpxy_mm_message_handler(struct mpxy_channel_info *channel_info,
+			    u32 msg_id, void *msgbuf, u32 msg_len,
+			    void *respbuf, u32 resp_max_len,
+			    unsigned long *resp_len, 
+				struct sbi_domain *server_domain);
+
+/** MPXY ReqFwd message handler */
+int sbi_mpxy_reqfwd_message_handler(struct mpxy_channel_info *channel_info,
+			    u32 msg_id, void *msgbuf, u32 msg_len,
+			    void *respbuf, u32 resp_max_len,
+			    unsigned long *resp_len, 
+				struct sbi_domain *server_domain);
+
 /** 
  * When switching domains we need to copy the context from
  * shmem buffer of one channel on first domain to the 2nd 
