@@ -86,6 +86,11 @@ static struct mpxy_state *sbi_domain_get_mpxy_state(struct sbi_domain *dom,
 						    u32 hartindex);
 
 /** Macro to obtain the current hart's MPXY state pointer in current domain */
+#define sbi_given_domain_mpxy_state_thishart_ptr(domain)			\
+	sbi_domain_get_mpxy_state(domain,	\
+				  current_hartindex())
+
+/** Macro to obtain the current hart's MPXY state pointer in current domain */
 #define sbi_domain_mpxy_state_thishart_ptr()			\
 	sbi_domain_get_mpxy_state(sbi_domain_thishart_ptr(),	\
 				  current_hartindex())
@@ -110,6 +115,20 @@ static inline void *hart_shmem_base(struct mpxy_state *ms)
 {
 	return (void *)(unsigned long)SHMEM_PHYS_ADDR(ms->shmem.shmem_addr_hi,
 						ms->shmem.shmem_addr_lo);
+}
+
+/**
+ * Wrapper for domain_shmem_base, This first fetches
+ * the mpxy_state variable for the provided domain and
+ * then returns the base address using domain_shmem_base
+ * method.
+ */
+void *sbi_get_domain_shmem_base(struct sbi_domain *dom)
+{
+	struct mpxy_state *ms = sbi_given_domain_mpxy_state_thishart_ptr(dom);
+	void *shmem_base = hart_shmem_base(ms);
+	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
+	return shmem_base;
 }
 
 /** Make sure all attributes are packed for direct memcpy in ATTR_READ */
