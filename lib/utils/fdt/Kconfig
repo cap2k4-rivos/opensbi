@@ -22,4 +22,9 @@ config FDT_FIXUPS_PRESERVE_PMU_NODE
 	help
 	  Preserve PMU node properties for debugging purposes.
 
+config FDT_BOOT_HARTID
+	bool "FDT based Boot Hart ID"
+	depends on FDT
+	default n
+
 endif
