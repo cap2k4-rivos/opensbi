@@ -31,7 +31,7 @@ static void *mpxy_get_respbuf(u32 msg_id, struct sbi_mpxy_channel *channel, void
 		container_of(channel, struct mpxy_channel_info, channel);
 
 	if(RPMI_SRVGRP_MANAGEMENT_MODE == service_group){
-		if(RISCV_MSG_ID_SMM_VERSION == msg_id)
+		if(RISCV_MSG_ID_SMM_GET_ATTRIBUTES == msg_id)
 			return msgbuf;
 	} else if(RPMI_SRVGRP_REQUEST_FORWARD == service_group){
 		if(RPMI_REQFWD_SRV_ENABLE_NOTIFICATION == msg_id)
@@ -153,6 +153,7 @@ static int mpxy_init(const void *fdt, int nodeoff, const struct fdt_match *match
         sbi_free(channel_info);
         return rc;
     }
+	sbi_printf("[OpenSBI MPXY] Channel with channel id: %d initialised!\n", channel_info->channel.channel_id);
 
 	channel_info->channel.send_message_with_response = mpxy_handle_send_message;
 	channel_info->channel.attrs.msg_data_maxlen = 4096;

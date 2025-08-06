@@ -140,8 +140,9 @@ int sbi_mpxy_reqfwd_message_handler(struct mpxy_channel_info *channel_info,
 	if(ret != SBI_SUCCESS){
 		return SBI_EFAIL;
 	}
-
+	sbi_printf("[OpenSBI MPXY] Request Forward Service Handler: channel_id: %d, message_id: %d, message_type: ", channel_info->channel.channel_id, msg_id);
 	if (RPMI_REQFWD_SRV_RETRIEVE_CURRENT_MESSAGE == msg_id) {
+		sbi_printf("REQFWD_RETRIEVE_CURRENT_MESSAGE\n");
 		update_channel_data_len(channel_info->channel.channel_id, 0);
 
 		struct rpmi_reqfwd_retrieve_message_resp resp_struct;
@@ -163,6 +164,7 @@ int sbi_mpxy_reqfwd_message_handler(struct mpxy_channel_info *channel_info,
 		*ack_len = get_channel_data_len(channel_info->channel.channel_id);
 
 	} else if (RPMI_REQFWD_SRV_COMPLETE_CURRENT_MESSAGE == msg_id) {
+		sbi_printf("REQFWD_COMPLETE_CURRENT_MESSAGE\n");
 		ret = check_shmem_initialised(switch_to_domain);
 		if(ret != SBI_SUCCESS) {
 			sbi_domain_context_exit();
