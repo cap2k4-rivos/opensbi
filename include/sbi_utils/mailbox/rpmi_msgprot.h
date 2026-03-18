@@ -1026,6 +1026,6 @@ struct rpmi_ras_sync_err_resp {
 	u32 returned;
 #define MAX_PEND_VECS	((RPMI_MSG_DATA_SIZE(RPMI_SLOT_SIZE_MIN) - (sizeof(u32) * 3)) / sizeof(u32))
 	u32 pending_vecs[MAX_PEND_VECS];
-
+};
 
 #endif /* !__RPMI_MSGPROT_H__ */

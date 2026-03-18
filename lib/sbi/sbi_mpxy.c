@@ -127,7 +127,7 @@ void *sbi_get_domain_shmem_base(struct sbi_domain *dom)
 {
 	struct mpxy_state *ms = sbi_given_domain_mpxy_state_thishart_ptr(dom);
 	void *shmem_base = hart_shmem_base(ms);
-	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
+	sbi_hart_protection_map_range((unsigned long)shmem_base, mpxy_shmem_size);
 	return shmem_base;
 }
 
